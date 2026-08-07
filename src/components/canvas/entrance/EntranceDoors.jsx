@@ -6,6 +6,8 @@ import gsap from 'gsap';
 import '../shaders/RevealMaterial'; // Registers alpha-discard reveal shader
 import { playBackgroundMusic } from '../../../utils/audioManager';
 import { useAchievements } from '../../../context/AchievementsContext';
+import { useBugs } from '../../../context/BugContext';
+import { useAudio } from '../../../context/AudioManager';
 import { isTouchDevice } from '../../../utils/deviceDetect';
 
 // Use same font as App.jsx preload (Inter) - works reliably
@@ -22,6 +24,7 @@ const FONT_URL = 'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMw
 const EntranceDoors = ({
     position = [0, 0, 22],
     onComplete,
+    onTransitionStart,
     corridorHeight = 8, // Taller wall
     corridorWidth = 15 // Wider wall
 }) => {
@@ -41,8 +44,10 @@ const EntranceDoors = ({
     const [isAnimating, setIsAnimating] = useState(false);
     const [isWindowHovered, setIsWindowHovered] = useState(false);
     const windowAvatarRef = useRef();
-    const { camera } = useThree();
+    const { camera, viewport } = useThree();
     const { unlockAchievement } = useAchievements();
+    const { fixBug, fixedBugs } = useBugs();
+    const { play } = useAudio();
 
     const [isMobile, setIsMobile] = useState(false);
 
@@ -53,6 +58,26 @@ const EntranceDoors = ({
     // Dla hooków tekstur musimy obliczyć to raz na starcie
     const isMobileDevice = typeof window !== 'undefined' && (isTouchDevice() || window.innerWidth < 1000);
     const dummyTex = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+    // ─── Bug system ────────────────────────────────────────────────────────────
+    // 5 bugs: wall, tree, window (original), cat, sign
+    // positions are initial spawn points; useFrame applies wander offsets
+    const BUG_CONFIGS = [
+        { id: 'wall',   baseX: -5.5,  baseY: 2.5,  z: 0.16 },
+        { id: 'tree',   baseX: -3.4,  baseY: 3.8,  z: 1.05 },
+        { id: 'window', baseX:  4.35, baseY: 4.05, z: 0.18, hitbox: 0.58, wanderX: 0.08, wanderY: 0.08 },
+        { id: 'cat',    baseX: -1.5,  baseY: 0.5,  z: 0.85 },
+        { id: 'sign',   baseX:  5.3,  baseY: 1.95, z: 0.24, hitbox: 0.48, wanderX: 0.08, wanderY: 0.06 },
+    ];
+
+    // Per-bug refs (keyed by id)
+    const bugRefs = useRef({});
+    const inkSplashRefs = useRef({});
+    const bugFixedTextRefs = useRef({});
+    const bugClickPos = useRef({}); // Store click position per bug
+    const [clipProgresses, setClipProgresses] = useState({}); // id → 0-1
+
+    const handleHideDelayRef = useRef(); // Track pending gsap.delayedCall for handle visibility
 
     const frameTexture = useTexture('/textures/doors/frame_sketch.webp');
     const doorLeftTexture = useTexture('/textures/doors/door_left_sketch.webp');
@@ -87,21 +112,27 @@ const EntranceDoors = ({
     const leftPupilRef = useRef();
     const rightPupilRef = useRef();
     const catGroupRef = useRef(); // To get world position for tracking
-    const bugRef = useRef();
-
-    // Bug Click Animation State
-    const [isBugClicked, setIsBugClicked] = useState(false);
-    const [textVisible, setTextVisible] = useState(false);
-    const [clipProgress, setClipProgress] = useState(0); // 0-1 for pencil drawing reveal
-    const inkSplashRef = useRef();
-    const handleHideDelayRef = useRef(); // Track pending gsap.delayedCall for handle visibility
-    const bugFixedTextRef = useRef();
-    const bugClickPos = useRef({ x: 0, y: 0 }); // Store click position
 
     // Duck Speech Bubble State (Rubber Duck Debugging)
     const [isDuckSpeaking, setIsDuckSpeaking] = useState(false);
     const [duckQuote, setDuckQuote] = useState('');
     const speechBubbleRef = useRef();
+
+    useEffect(() => {
+        console.log('[EntranceDoors] bug positions', BUG_CONFIGS.map((cfg) => ({
+            id: cfg.id,
+            x: cfg.baseX,
+            y: floorY + cfg.baseY,
+            z: cfg.z,
+            hitbox: cfg.hitbox ?? 0.4,
+        })));
+        console.log('[EntranceDoors] viewport bounds', {
+            width: viewport.width,
+            height: viewport.height,
+            distance: viewport.distance,
+            cameraPosition: camera.position.toArray(),
+        });
+    }, [camera, viewport.width, viewport.height, viewport.distance]);
 
     // Rubber Duck Debugging Quotes
     const duckQuotes = [
@@ -117,31 +148,34 @@ const EntranceDoors = ({
         "Works in production! 🚀",
     ];
 
-    // Bug Click Handler
-    const handleBugClick = (e) => {
+    // ─── Per-Bug Click Handler ────────────────────────────────────────────────
+    const handleBugClick = (e, bugId) => {
         e.stopPropagation();
-        if (isBugClicked) return; // Already clicked
+        if (fixedBugs.includes(bugId)) return; // Already fixed
 
-        // Store bug position at click time
-        if (bugRef.current) {
-            bugClickPos.current = {
-                x: bugRef.current.position.x,
-                y: bugRef.current.position.y
-            };
-        }
+        // Play pop sound
+        play('baloonpop', { volume: 0.6 });
 
-        setIsBugClicked(true);
-        document.body.style.cursor = "auto";
+        // Capture current wandered position
+        const bugMesh = bugRefs.current[bugId];
+        const clickX = bugMesh ? bugMesh.position.x : 0;
+        const clickY = bugMesh ? bugMesh.position.y : 0;
+        bugClickPos.current[bugId] = { x: clickX, y: clickY };
 
-        // Animate ink splash scale up
-        if (inkSplashRef.current) {
-            // Position ink splash at bug's last position
-            inkSplashRef.current.position.x = bugClickPos.current.x;
-            inkSplashRef.current.position.y = bugClickPos.current.y;
-            inkSplashRef.current.scale.set(0, 0, 0);
-            inkSplashRef.current.material.opacity = 1;
+        document.body.style.cursor = 'auto';
 
-            gsap.to(inkSplashRef.current.scale, {
+        // Mark as fixed in context (updates DOM overlay)
+        fixBug(bugId);
+
+        // Animate ink splash scale up at bug's last position
+        const splashMesh = inkSplashRefs.current[bugId];
+        if (splashMesh) {
+            splashMesh.position.x = clickX;
+            splashMesh.position.y = clickY;
+            splashMesh.scale.set(0, 0, 0);
+            splashMesh.material.opacity = 1;
+
+            gsap.to(splashMesh.scale, {
                 x: 0.8,
                 y: 0.8,
                 z: 1,
@@ -150,28 +184,28 @@ const EntranceDoors = ({
             });
         }
 
-        // Pencil drawing effect - smooth reveal from left to right
-        setTextVisible(true);
-        setClipProgress(0);
-
-        if (bugFixedTextRef.current) {
-            bugFixedTextRef.current.position.x = bugClickPos.current.x;
-            bugFixedTextRef.current.position.y = bugClickPos.current.y;
+        // Pencil drawing reveal for 'BUG FIXED!' text
+        const textMesh = bugFixedTextRefs.current[bugId];
+        if (textMesh) {
+            textMesh.position.x = clickX;
+            textMesh.position.y = clickY;
         }
 
-        // Animate clip progress from 0 to 1 (reveals text like pencil drawing)
+        setClipProgresses(prev => ({ ...prev, [bugId]: 0 }));
+
+        // Animate clip progress 0 → 1 (pencil-draw reveal)
         gsap.to({ progress: 0 }, {
             progress: 1,
             duration: 0.8,
             ease: 'power1.inOut',
             onUpdate: function () {
-                setClipProgress(this.targets()[0].progress);
+                setClipProgresses(prev => ({ ...prev, [bugId]: this.targets()[0].progress }));
             },
             onComplete: () => {
-                // Fade out after a delay
+                // Fade out ink splash after 1.5s
                 setTimeout(() => {
-                    if (inkSplashRef.current) {
-                        gsap.to(inkSplashRef.current.material, {
+                    if (splashMesh) {
+                        gsap.to(splashMesh.material, {
                             opacity: 0,
                             duration: 1,
                             ease: 'power2.out'
@@ -260,6 +294,7 @@ const EntranceDoors = ({
 
         setIsOpen(true);
         setIsAnimating(true);
+        onTransitionStart?.();
         playBackgroundMusic();
         unlockAchievement('corridor_enter');
 
@@ -498,22 +533,24 @@ const EntranceDoors = ({
             mousePivotRef.current.rotation.x = Math.sin(clock.elapsedTime * 1.5) * 0.05;
         }
 
-        // --- Bug Animation ---
-        if (bugRef.current) {
-            const time = clock.elapsedTime;
-            // Wandering logic: slightly complex sine waves for "random" walking felt
-            // Initial Pos: [2.5, floorY + 3.0, 0.16] (Above window)
-            // Range: +/- 0.3 in X, +/- 0.3 in Y
+        // --- Bug Animation (5 bugs with unique phase offsets) ---
+        const time = clock.elapsedTime;
+        BUG_CONFIGS.forEach((cfg, i) => {
+            const mesh = bugRefs.current[cfg.id];
+            if (!mesh || fixedBugs.includes(cfg.id)) return;
 
-            const xOffset = Math.sin(time * 0.8) * 0.3 + Math.sin(time * 1.5) * 0.1;
-            const yOffset = Math.cos(time * 0.6) * 0.2 + Math.cos(time * 1.1) * 0.1;
+            // Unique phase offsets per bug so they wander independently
+            const phaseX = i * 1.2;
+            const phaseY = i * 0.7;
+            const wanderX = cfg.wanderX ?? 0.3;
+            const wanderY = cfg.wanderY ?? 0.2;
+            const xOffset = Math.sin(time * 0.8 + phaseX) * wanderX + Math.sin(time * 1.5 + phaseX) * (wanderX * 0.33);
+            const yOffset = Math.cos(time * 0.6 + phaseY) * wanderY + Math.cos(time * 1.1 + phaseY) * (wanderY * 0.5);
 
-            bugRef.current.position.x = 3 + xOffset;
-            bugRef.current.position.y = (floorY + 3.8) + yOffset;
-
-            // Random rotation jitter
-            bugRef.current.rotation.z = Math.sin(time * 5) * 0.1 + Math.atan2(yOffset, xOffset) * 0.2;
-        }
+            mesh.position.x = cfg.baseX + xOffset;
+            mesh.position.y = (floorY + cfg.baseY) + yOffset;
+            mesh.rotation.z = Math.sin(time * 5 + phaseX) * 0.1 + Math.atan2(yOffset, xOffset) * 0.2;
+        });
     });
 
 
@@ -626,10 +663,10 @@ const EntranceDoors = ({
 
             {/* === CAPABILITY SIGN BANNERS ABOVE GATE === */}
             {[
-                { text: "AdSense Expert", x: -1.8 },
+                { text: "Full Stack Dev", x: -1.8 },
                 { text: "Web Developer", x: -0.6 },
                 { text: "Website Developer", x: 0.6 },
-                { text: "Blogging Expert", x: 1.8 }
+                { text: "AI Integration", x: 1.8 }
             ].map((banner, index) => (
                 <group key={index} position={[banner.x, frameCenterY + 1.65, 0.2]}>
                     {/* Shadow / Border plane */}
@@ -688,7 +725,7 @@ const EntranceDoors = ({
                         anchorY="middle"
                         font="/fonts/CabinSketch-Bold.ttf"
                     >
-                        AdSense 🪙
+                        Full Stack 💻
                     </Text>
                 </group>
 
@@ -812,7 +849,7 @@ const EntranceDoors = ({
                         anchorY="middle"
                         font="/fonts/CabinSketch-Bold.ttf"
                     >
-                        Blogging ✍️
+                        AI/ML 🤖
                     </Text>
                 </group>
 
@@ -1010,64 +1047,68 @@ const EntranceDoors = ({
                 </group>
             </group>
 
-            {/* ANIMATED BUG (Right Side - Above Window) */}
-            {!isBugClicked && (
-                <mesh
-                    ref={bugRef}
-                    position={[2.5, floorY + 2.8, 0.16]}
-                    onClick={handleBugClick}
-                    onPointerEnter={() => { document.body.style.cursor = "pointer"; }}
-                    onPointerLeave={() => { document.body.style.cursor = "auto"; }}
-                >
-                    <planeGeometry args={[0.4, 0.4]} />
-                    <meshBasicMaterial color="#fcf3c6"
-                        map={bugTexture}
-                        transparent={true}
-                        alphaTest={0.01}
-                        depthWrite={false}
-                    />
-                </mesh>
-            )}
+            {/* === ANIMATED BUGS (5 total) === */}
+            {BUG_CONFIGS.map((cfg) => {
+                const isFixed = fixedBugs.includes(cfg.id);
+                const clipProg = clipProgresses[cfg.id] || 0;
+                return (
+                    <group key={cfg.id}>
+                        {/* Bug mesh — hidden when fixed */}
+                        {!isFixed && (
+                            <mesh
+                                ref={(el) => { bugRefs.current[cfg.id] = el; }}
+                                position={[cfg.baseX, floorY + cfg.baseY, cfg.z]}
+                                onClick={(e) => handleBugClick(e, cfg.id)}
+                                onPointerEnter={() => { document.body.style.cursor = 'pointer'; }}
+                                onPointerLeave={() => { document.body.style.cursor = 'auto'; }}
+                            >
+                                <planeGeometry args={[cfg.hitbox ?? 0.4, cfg.hitbox ?? 0.4]} />
+                                <meshBasicMaterial color="#fcf3c6"
+                                    map={bugTexture}
+                                    transparent={true}
+                                    alphaTest={0.01}
+                                    depthWrite={false}
+                                />
+                            </mesh>
+                        )}
 
-            {/* INK SPLASH - always mounted to preload texture/shader */}
-            <mesh
-                ref={inkSplashRef}
-                position={[2.5, floorY + 2.8, 0.17]}
-                scale={[0, 0, 0]}
-            // Removed conditional 'visible' to ensure GPU upload
-            >
-                <planeGeometry args={[2, 2]} />
-                <meshBasicMaterial color="#fcf3c6"
-                    map={inkSplashTexture}
-                    transparent={true}
-                    alphaTest={0.01}
-                    depthWrite={false}
-                />
-            </mesh>
+                        {/* Ink splash — always mounted (preloads texture); GSAP sets scale */}
+                        <mesh
+                            ref={(el) => { inkSplashRefs.current[cfg.id] = el; }}
+                            position={[cfg.baseX, floorY + cfg.baseY, cfg.z + 0.01]}
+                            scale={[0, 0, 0]}
+                        >
+                            <planeGeometry args={[2, 2]} />
+                            <meshBasicMaterial color="#fcf3c6"
+                                map={inkSplashTexture}
+                                transparent={true}
+                                alphaTest={0.01}
+                                depthWrite={false}
+                            />
+                        </mesh>
 
-            {/* BUG FIXED! Text - always mounted to preload font */}
-            <Text
-                ref={bugFixedTextRef}
-                position={[2.5, floorY + 2.8, 0.35]} // Default pos, updated on click
-                fontSize={0.25} // Increased size slightly for CabinSketch
-                color="#1a1a1a"
-                anchorX="center"
-                anchorY="middle"
-                font="/fonts/CabinSketch-Bold.ttf"
-                outlineWidth={0.015}
-                outlineColor="#ffffff"
-                clipRect={[-1, -0.5, -1 + (clipProgress * 2.5), 0.5]}
-            >
-                BUG FIXED!
-            </Text>
-
-
-
-
+                        {/* BUG FIXED! text — always mounted (preloads font); clip reveal via clipRect */}
+                        <Text
+                            ref={(el) => { bugFixedTextRefs.current[cfg.id] = el; }}
+                            position={[cfg.baseX, floorY + cfg.baseY, cfg.z + 0.2]}
+                            fontSize={0.25}
+                            color="#1a1a1a"
+                            anchorX="center"
+                            anchorY="middle"
+                            font="/fonts/CabinSketch-Bold.ttf"
+                            outlineWidth={0.015}
+                            outlineColor="#ffffff"
+                            clipRect={[-1, -0.5, -1 + (clipProg * 2.5), 0.5]}
+                        >
+                            BUG FIXED!
+                        </Text>
+                    </group>
+                );
+            })}
 
             {/* TREE & MOUSE (Left Side) */}
             <group position={[-2.9, floorY + 2.7, 1]}>
-                {/* Tree */}
+                {/* Tree — original sketch texture only, no hover tint */}
                 <mesh position={[0, 0, 0]}>
                     <planeGeometry args={[6, 8]} />
                     <meshBasicMaterial color="#fcf3c6"

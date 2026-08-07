@@ -1,4 +1,4 @@
-import { useRef, useState, Suspense } from 'react';
+import { useRef, useState, useEffect, Suspense } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 
 // Eagerly import all room components
@@ -23,7 +23,8 @@ const RoomWarmup = ({ onWarmupComplete, isLowTier }) => {
     const [isDone, setIsDone] = useState(false);
     const frameCount = useRef(0);
     const completeFired = useRef(false);
-    const { gl, scene, camera } = useThree();
+    const timeoutRef = useRef(null);
+    useThree();
 
     // Wait for rooms to render a few frames, then compile and unmount
     const warmupStart = useRef(performance.now());
@@ -43,6 +44,10 @@ const RoomWarmup = ({ onWarmupComplete, isLowTier }) => {
             completeFired.current = true;
 
             const finishWarmup = () => {
+                if (timeoutRef.current) {
+                    clearTimeout(timeoutRef.current);
+                    timeoutRef.current = null;
+                }
                 const warmupDuration = ((performance.now() - warmupStart.current) / 1000).toFixed(2);
                 // console.info(`🔥 GPU/Shader Warmup Complete: ${warmupDuration}s ${isLowTier ? '(Bypassed for LOW tier)' : ''}`);
                 
@@ -52,28 +57,29 @@ const RoomWarmup = ({ onWarmupComplete, isLowTier }) => {
                 });
             };
 
-            // On low tier, bypass intense gl.compileAsync to save memory and avoid Context Lost
-            if (isLowTier) {
-                finishWarmup();
-                return;
-            }
-
-            // Force compile all shaders in the scene (including warm-up rooms)
-            // Use 2026 compileAsync to avoid blocking the main thread!
-            if (gl.compileAsync) {
-                gl.compileAsync(scene, camera, scene)
-                    .then(finishWarmup)
-                    .catch((err) => {
-                        console.error('Async compilation failed, falling back to sync', err);
-                        gl.compile(scene, camera);
-                        finishWarmup();
-                    });
-            } else {
-                gl.compile(scene, camera);
-                finishWarmup();
-            }
+            const warmupDelay = isLowTier ? 0 : 180;
+            timeoutRef.current = setTimeout(finishWarmup, warmupDelay);
         }
     });
+
+    useEffect(() => {
+        if (isDone || completeFired.current) return;
+
+        timeoutRef.current = setTimeout(() => {
+            if (!completeFired.current) {
+                completeFired.current = true;
+                setIsDone(true);
+                onWarmupComplete?.();
+            }
+        }, 12000);
+
+        return () => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+                timeoutRef.current = null;
+            }
+        };
+    }, [isDone, onWarmupComplete]);
 
     if (isDone) return null;
 

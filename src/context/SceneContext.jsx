@@ -18,6 +18,7 @@ export const SceneProvider = ({ children }) => {
 
     const [currentRoom, setCurrentRoom] = useState(null); // null = corridor, 'about', 'portfolio', etc.
     const [hasEntered, setHasEntered] = useState(false);  // Has user clicked entrance doors?
+    const [isEntering, setIsEntering] = useState(false);  // Entrance door click transition in progress
     const [exitRequested, setExitRequested] = useState(false); // Signal to request exit from room
     const [overlayContent, setOverlayContent] = useState(null); // Content for overlay (Studio monitor etc)
 
@@ -34,6 +35,7 @@ export const SceneProvider = ({ children }) => {
         setCurrentRoom(roomId);
         setExitRequested(false); // Clear any pending exit request
         setOverlayContent(null); // Clear overlay on room change
+        setIsEntering(false);
 
         // Teleportation cleanup - if we just teleported in
         // Note: isFastTeleport is cleared by signalRoomReady, not here
@@ -47,6 +49,7 @@ export const SceneProvider = ({ children }) => {
         setCurrentRoom(null);
         setExitRequested(false);
         setOverlayContent(null);
+        setIsEntering(false);
     }, []);
 
     // Request exit - this signals to DoorSection to trigger exit animation
@@ -62,6 +65,11 @@ export const SceneProvider = ({ children }) => {
 
     const markEntered = useCallback(() => {
         setHasEntered(true);
+        setIsEntering(false);
+    }, []);
+
+    const beginEntranceTransition = useCallback(() => {
+        setIsEntering(true);
     }, []);
 
     const openOverlay = useCallback((content) => {
@@ -80,6 +88,7 @@ export const SceneProvider = ({ children }) => {
 
         setTeleportTarget(roomId);
         setIsTeleporting(true);
+        setIsEntering(false);
         setIsFastTeleport(true); // Enable fast teleport mode
         setTeleportPhase('closing'); // Paper starts closing
         setOverlayContent(null);
@@ -134,11 +143,13 @@ export const SceneProvider = ({ children }) => {
         setTeleportPhase(null);
         setPendingDoorClick(null);
         setIsFastTeleport(false);
+        setIsEntering(false);
     }, []);
 
     const value = useMemo(() => ({
         currentRoom,
         hasEntered,
+        isEntering,
         exitRequested,
         overlayContent, // Exposed
         enterRoom,
@@ -146,6 +157,7 @@ export const SceneProvider = ({ children }) => {
         requestExit,
         clearExitRequest,
         markEntered,
+        beginEntranceTransition,
         openOverlay,    // Exposed
         closeOverlay,   // Exposed
         isInRoom: currentRoom !== null,
@@ -168,6 +180,7 @@ export const SceneProvider = ({ children }) => {
     }), [
         currentRoom,
         hasEntered,
+        isEntering,
         exitRequested,
         overlayContent,
         enterRoom,
@@ -175,6 +188,7 @@ export const SceneProvider = ({ children }) => {
         requestExit,
         clearExitRequest,
         markEntered,
+        beginEntranceTransition,
         openOverlay,
         closeOverlay,
         // Teleportation dependencies

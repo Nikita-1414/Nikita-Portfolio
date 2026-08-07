@@ -25,11 +25,15 @@ const ENTRANCE_DOORS_Z = 22;
  * 2. Click doors -> they open + camera flies through
  * 3. Behind doors: infinite corridor with ITOM
  */
-const Experience = ({ isLoaded, onSceneReady, performanceTier }) => {
+const Experience = ({ isLoaded, onSceneReady, onBoot, performanceTier }) => {
     // Use SceneContext for room state
-    const { hasEntered, markEntered, enterRoom, isTeleporting, isInRoom, pendingDoorClick } = useScene();
+    const { hasEntered, markEntered, enterRoom, beginEntranceTransition, isTeleporting, isInRoom, pendingDoorClick } = useScene();
 
     const { camera } = useThree();
+
+    useEffect(() => {
+        onBoot?.();
+    }, [onBoot]);
 
     // Camera control - both scroll and parallax only work after entering
     // Disable during teleporting to prevent scroll interference
@@ -52,6 +56,10 @@ const Experience = ({ isLoaded, onSceneReady, performanceTier }) => {
     const handleEntranceComplete = useCallback(() => {
         markEntered();
     }, [markEntered]);
+
+    const handleEntranceTransitionStart = useCallback(() => {
+        beginEntranceTransition();
+    }, [beginEntranceTransition]);
 
     // Handle door enter from inside corridor
     const handleDoorEnter = useCallback((doorId) => {
@@ -91,6 +99,7 @@ const Experience = ({ isLoaded, onSceneReady, performanceTier }) => {
                 <EntranceDoors
                     position={[0, 0, ENTRANCE_DOORS_Z]}
                     onComplete={handleEntranceComplete}
+                    onTransitionStart={handleEntranceTransitionStart}
                 />
             )}
 

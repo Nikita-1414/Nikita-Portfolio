@@ -71,6 +71,143 @@ const GlobalOverlay = () => {
 const ContentCard = ({ content, isOpen, onClose, isMobile }) => {
     if (!content) return null;
 
+    if (content.layout === 'gallery_project') {
+        const project = content.project;
+        if (!project) return null;
+
+        const techLabels = (project.cardTechKeys || []).map((key) =>
+            key.replace('nextjs', 'Next.js')
+               .replace('javascript', 'JavaScript')
+               .replace('mongodb', 'MongoDB')
+               .replace('nodedotjs', 'Node.js')
+               .replace('node', 'Node.js')
+               .replace('express', 'Express')
+               .replace('firebase', 'Firebase')
+               .replace('fastapi', 'FastAPI')
+               .replace('streamlit', 'Streamlit')
+               .replace('python', 'Python')
+               .replace('react', 'React')
+               .replace('typescript', 'TypeScript')
+        );
+
+        const githubUrl = project.url || project.githubUrl;
+
+        return (
+            <div
+                className="global-overlay-wrapper"
+                style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 1000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 'clamp(16px, 4vw, 40px)',
+                    background: 'rgba(5, 2, 9, 0.88)',
+                    opacity: isOpen ? 1 : 0,
+                    transition: 'opacity 0.35s ease',
+                }}
+                onClick={handleBackdropClick}
+            >
+                <div
+                    className="global-overlay-card gallery-project-modal"
+                    style={{
+                        width: 'min(760px, 100%)',
+                        maxHeight: '88vh',
+                        overflow: 'auto',
+                        borderRadius: '18px',
+                        border: '1.5px solid rgba(49, 16, 89, 0.95)',
+                        background: '#fdf8e2',
+                        boxShadow: '0 26px 60px rgba(0, 0, 0, 0.35)',
+                        padding: '24px',
+                        transform: isOpen ? 'translateY(0) scale(1)' : 'translateY(24px) scale(0.98)',
+                        transition: 'transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.45s ease',
+                        opacity: isOpen ? 1 : 0,
+                        color: '#311059',
+                        position: 'relative',
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Close project details"
+                        style={{
+                            position: 'absolute',
+                            top: '16px',
+                            right: '16px',
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '999px',
+                            border: '1px solid rgba(49, 16, 89, 0.35)',
+                            background: 'rgba(255,255,255,0.55)',
+                            color: '#311059',
+                            display: 'grid',
+                            placeItems: 'center',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        ×
+                    </button>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        <div style={{ fontFamily: "'Cabin Sketch', cursive", fontSize: '2rem', lineHeight: 1, paddingRight: '48px' }}>
+                            {project.title}
+                        </div>
+                        <div style={{ fontSize: '1rem', color: 'rgba(49, 16, 89, 0.82)', lineHeight: 1.5 }}>
+                            {project.cardTagline || project.shortDescription || project.description}
+                        </div>
+
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                            {techLabels.map((label) => (
+                                <span
+                                    key={label}
+                                    style={{
+                                        padding: '5px 10px',
+                                        borderRadius: '999px',
+                                        border: '1px solid rgba(49, 16, 89, 0.25)',
+                                        background: 'rgba(255,255,255,0.5)',
+                                        fontSize: '0.82rem',
+                                    }}
+                                >
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+
+                        <div style={{ fontSize: '0.98rem', lineHeight: 1.65, color: '#1f1630' }}>
+                            {project.description}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '4px' }}>
+                            {githubUrl && (
+                                <a
+                                    href={githubUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '10px 14px',
+                                        borderRadius: '999px',
+                                        background: '#311059',
+                                        color: '#fdf8e2',
+                                        textDecoration: 'none',
+                                        border: '1px solid #311059',
+                                        fontWeight: 600,
+                                    }}
+                                >
+                                    <span>GitHub</span>
+                                </a>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     const label = content.platformConfig?.label || 'Content';
 
     // GSAP TextPlugin typing effect for description

@@ -10,7 +10,7 @@ import '../../styles/ScreenReaderOverlay.scss';
  * Visually hidden via .sr-only but fully accessible to assistive tech.
  */
 const ScreenReaderOverlay = () => {
-    const { hasEntered, isInRoom, currentRoom, teleportTo, requestExit } = useScene();
+    const { hasEntered, isEntering, isInRoom, currentRoom, teleportTo, requestExit } = useScene();
     
     // Pobieranie danych do wygenerowania niewidocznego HTML-a dla SEO / robotów
     const projects = useGalleryProjects();
@@ -29,7 +29,7 @@ const ScreenReaderOverlay = () => {
                 <h1>Nikita — Full Stack Developer & UX Designer</h1>
                 <h2>Portfolio Navigation</h2>
 
-                {!hasEntered && (
+                {!hasEntered && !isEntering && (
                     <p>Welcome to Nikita's interactive 3D portfolio. Click or press Enter on the doors to enter.</p>
                 )}
 

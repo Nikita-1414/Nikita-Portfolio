@@ -21,7 +21,7 @@ const ROOMS = [
 const PIN_START_POSITION = { x: 50.5, y: 97 };
 
 const NavigationUI = () => {
-    const { currentRoom, isInRoom, requestExit, hasEntered, teleportTo, isTeleporting } = useScene();
+    const { currentRoom, isInRoom, requestExit, hasEntered, isEntering, teleportTo, isTeleporting } = useScene();
     const { isMuted, toggleMute, globalVolume, setGlobalVolume } = useAudio();
     const { showTutorial, unlockAchievement } = useAchievements();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -126,12 +126,12 @@ const NavigationUI = () => {
 
     // Show entrance hint before entering, and explore hint when user enters
     useEffect(() => {
-        if (!hasEntered && !isTeleporting) {
+        if (!hasEntered && !isTeleporting && !isEntering) {
             showTutorial('corridor_enter');
         } else if (hasEntered && !isTeleporting && !isInRoom) {
             showTutorial('corridor_explore');
         }
-    }, [hasEntered, isTeleporting, isInRoom, showTutorial]);
+    }, [hasEntered, isEntering, isTeleporting, isInRoom, showTutorial]);
 
     // Close menu when entering a room or starting teleport
     useEffect(() => {

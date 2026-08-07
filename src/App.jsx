@@ -12,6 +12,8 @@ import { SceneProvider, useScene } from './context/SceneContext';
 import NavigationUI from './components/ui/NavigationUI';
 import GlobalOverlay from './components/ui/GlobalOverlay';
 import ScreenReaderOverlay from './components/ui/ScreenReaderOverlay';
+import BugTrackerOverlay from './components/ui/BugTrackerOverlay';
+import { BugProvider } from './context/BugContext';
 import { useDocumentMeta } from './hooks/useDocumentMeta';
 
 // Lazy load the heavy 3D experience
@@ -97,6 +99,7 @@ function DocumentMetaBridge() {
 function AppContent() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
+  const [experienceBooted, setExperienceBooted] = useState(false);
   const { settings, downgradeTier, tier } = usePerformance();
 
   useEffect(() => {
@@ -141,6 +144,7 @@ function AppContent() {
                 <Experience
                   isLoaded={isLoaded}
                   onSceneReady={handleSceneReady}
+                  onBoot={() => setExperienceBooted(true)}
                   performanceTier={tier}
                 />
                 <Preload all />
@@ -155,12 +159,13 @@ function AppContent() {
               <GlobalOverlay />
               <PaperTransition />
               <ScreenReaderOverlay />
+              <BugTrackerOverlay />
             </>
           )}
 
           {/* 2D Preloader */}
           <Preloader
-            ready={sceneReady}
+            ready={sceneReady && experienceBooted}
             onComplete={() => setIsLoaded(true)}
           />
         </div>
@@ -180,7 +185,9 @@ export default function App() {
   return (
     <PerformanceProvider>
       <AchievementsProvider>
-        <AppContent />
+        <BugProvider>
+          <AppContent />
+        </BugProvider>
       </AchievementsProvider>
     </PerformanceProvider>
   );

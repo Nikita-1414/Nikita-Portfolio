@@ -82,7 +82,8 @@ export const AudioProvider = ({ children }) => {
             'szummiasta': '/sounds/szummiasta.mp3', // Szum miasta w pokoju The Gallery
             'uchyleniedrzwi': '/sounds/uchyleniedrzwi.mp3', // Skrzypienie przy najechaniu
             'otwarciedrzwi': '/sounds/otwarciedrzwi.mp3',   // Otwarcie głównych/bocznych drzwi
-            'zamknieciedrzwi': '/sounds/zamknieciedrzwi.mp3' // Zamykanie drzwi
+            'zamknieciedrzwi': '/sounds/zamknieciedrzwi.mp3', // Zamykanie drzwi
+            'baloonpop': '/sounds/baloonpoop.mp3', // Bug click pop sound
         };
         const path = soundPaths[soundName] || `/sounds/${soundName}.mp3`;
 

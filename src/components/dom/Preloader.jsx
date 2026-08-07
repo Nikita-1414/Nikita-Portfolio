@@ -232,7 +232,7 @@ const Preloader = ({ onComplete, ready }) => {
       if (ready) {
         newTarget = 100;
       } else {
-        newTarget = 90;
+        newTarget = 95;
       }
     }
 
@@ -268,16 +268,16 @@ const Preloader = ({ onComplete, ready }) => {
 
   useEffect(() => {
     const distance = targetProgress - displayProgressRef.current;
-    let duration = 0.5;
+    let duration = 0.35;
 
     if (distance > 60) {
-      duration = 1.5;
-    } else if (distance > 30) {
       duration = 1.0;
+    } else if (distance > 30) {
+      duration = 0.7;
     } else if (distance > 10) {
-      duration = 0.6;
-    } else if (distance > 0) {
       duration = 0.4;
+    } else if (distance > 0) {
+      duration = 0.25;
     }
 
     gsap.to(trackerRef.current, {
@@ -299,13 +299,13 @@ const Preloader = ({ onComplete, ready }) => {
         if (pathLeftRef.current) pathLeftRef.current.style.strokeDashoffset = strokeDashoffset;
         if (pathRightRef.current) pathRightRef.current.style.strokeDashoffset = strokeDashoffset;
 
-        let statusMsg = "Initializing Sketchbook...";
-        if (safeProgress < 25) statusMsg = "Sketching Digital Canvas...";
-        else if (safeProgress < 50) statusMsg = "Laying WordPress Foundation...";
-        else if (safeProgress < 70) statusMsg = "Calibrating Video Renders...";
-        else if (safeProgress < 85) statusMsg = "Structuring AdSense Expert System...";
-        else if (safeProgress < 95) statusMsg = "Optimizing SEO & Blogging Data...";
-        else statusMsg = "Opening Sketchbook Portal...";
+        let statusMsg = "Compiling Components...";
+        if (safeProgress < 25) statusMsg = "Compiling Components...";
+        else if (safeProgress < 50) statusMsg = "Initializing Build...";
+        else if (safeProgress < 70) statusMsg = "Rendering UI Layer...";
+        else if (safeProgress < 85) statusMsg = "Optimizing Bundle...";
+        else if (safeProgress < 95) statusMsg = "Almost Ready...";
+        else statusMsg = "Launching Portfolio...";
 
         if (statusLeftRef.current) statusLeftRef.current.innerText = statusMsg;
         if (statusRightRef.current) statusRightRef.current.innerText = statusMsg;
@@ -401,7 +401,7 @@ const Preloader = ({ onComplete, ready }) => {
           <RingLoader />
         </div>
         <div className="preloader__status" style={statusStyle} ref={statusLeftRef}>
-          Initializing Sketchbook...
+          Compiling Components...
         </div>
 
         {/* SVG is now INSIDE the clipped half */}
@@ -420,7 +420,7 @@ const Preloader = ({ onComplete, ready }) => {
           <RingLoader />
         </div>
         <div className="preloader__status" style={statusStyle} ref={statusRightRef}>
-          Initializing Sketchbook...
+          Compiling Components...
         </div>
 
         {/* SVG is now INSIDE the clipped half */}

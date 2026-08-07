@@ -1,10 +1,11 @@
 import { useRef, useState, useMemo, useEffect, forwardRef, useImperativeHandle, memo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Text, useTexture, Float, PositionalAudio } from '@react-three/drei';
+import { Text, useTexture, Float, PositionalAudio, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { Observer } from 'gsap/all';
 import { useScene } from '../../../../context/SceneContext';
+import { SiGithub, SiJavascript, SiReact, SiNodedotjs, SiMongodb, SiPython, SiTypescript, SiNextdotjs, SiExpress, SiFirebase, SiHtml5, SiFastapi, SiStreamlit } from 'react-icons/si';
 
 gsap.registerPlugin(Observer);
 import { useAchievements } from '../../../../context/AchievementsContext';
@@ -150,8 +151,23 @@ const BIRD_HEIGHT = 0.35;
 // 0.2 = 20% crop from the right (corridor side)
 const RIGHT_CROP_AMOUNT = 0.2;
 
+const TECH_ICON_MAP = {
+    javascript: SiJavascript,
+    react: SiReact,
+    node: SiNodedotjs,
+    mongodb: SiMongodb,
+    python: SiPython,
+    typescript: SiTypescript,
+    nextjs: SiNextdotjs,
+    express: SiExpress,
+    firebase: SiFirebase,
+    html: SiHtml5,
+    fastapi: SiFastapi,
+    streamlit: SiStreamlit,
+};
+
 const GalleryRoom = ({ showRoom, onReady, isExiting, isWarmup }) => {
-    const { openOverlay, isTeleporting } = useScene();
+    const { openOverlay, closeOverlay, overlayContent, isTeleporting } = useScene();
     const { showTutorial, unlockAchievement, hidePopup } = useAchievements();
     const { globalVolume, isMuted } = useAudio();
     const effectiveVolume = isMuted ? 0 : AUDIO_SETTINGS.volume * globalVolume;
@@ -174,16 +190,24 @@ const GalleryRoom = ({ showRoom, onReady, isExiting, isWarmup }) => {
     useEffect(() => {
         if (isExiting || isTeleporting) {
             hidePopup();
+            closeOverlay();
+            setSelectedCard(null);
         }
-    }, [isExiting, isTeleporting, hidePopup]);
+    }, [isExiting, isTeleporting, hidePopup, closeOverlay]);
+
+    useEffect(() => {
+        if (!overlayContent) {
+            setSelectedCard(null);
+        }
+    }, [overlayContent]);
 
     // Setup Paint Transition
     const { onBeforeCompile, animatePaint, resetPaint, uniformsData, updateRoomOrigin } = usePaintMaterial();
-    
+
     // Track transition state to disable interactions
     const [isTransitioning, setIsTransitioning] = useState(false);
-    
-    // Track if user teleported into this room 
+
+    // Track if user teleported into this room
     const wasTeleportedRef = useRef(false);
     useEffect(() => {
         if (isTeleporting) wasTeleportedRef.current = true;
@@ -202,7 +226,7 @@ const GalleryRoom = ({ showRoom, onReady, isExiting, isWarmup }) => {
                 resetPaint();
                 // Start the paint animation with a slight delay so it happens *during* fly-in
                 animatePaint(0.2, 2.5);
-                
+
                 // Re-enable interactions once painting finishes
                 setTimeout(() => {
                     setIsTransitioning(false);
@@ -315,6 +339,39 @@ const GalleryRoom = ({ showRoom, onReady, isExiting, isWarmup }) => {
 
     // Construct the full list of projects (repeated) with textures attached
     const projects = useMemo(() => {
+        const deriveTechKeys = (projectData) => {
+            if (Array.isArray(projectData.stackKeys) && projectData.stackKeys.length > 0) {
+                return projectData.stackKeys;
+            }
+
+            const labels = [
+                ...(projectData.tags || []),
+                projectData.category || '',
+                projectData.title || ''
+            ].join(' ').toLowerCase();
+
+            const keys = [];
+            const addKey = (key, match) => {
+                if (labels.includes(match) && !keys.includes(key)) keys.push(key);
+            };
+
+            addKey('nextjs', 'next');
+            addKey('python', 'python');
+            addKey('streamlit', 'streamlit');
+            addKey('fastapi', 'fastapi');
+            addKey('mongodb', 'mongo');
+            addKey('express', 'express');
+            addKey('react', 'react');
+            addKey('node', 'node');
+            addKey('firebase', 'firebase');
+            addKey('typescript', 'typescript');
+            addKey('javascript', 'javascript');
+            addKey('html', 'html');
+            addKey('css', 'css');
+
+            return keys.length > 0 ? keys : ['react', 'javascript', 'node'];
+        };
+
         return Array.from({ length: PROJECT_COUNT }).map((_, i) => {
             const projectIndex = i % activeProjects.length;
             const projectData = activeProjects[projectIndex];
@@ -338,8 +395,10 @@ const GalleryRoom = ({ showRoom, onReady, isExiting, isWarmup }) => {
                 overlayTextureRaw.colorSpace = THREE.SRGBColorSpace;
             }
 
-            // Map tech stack logos to the correct version (painted or regular)
-            const techStack = projectData.techStack.map(path => {
+            // Keep the original texture stack for any legacy uses, but guard against
+            // Sanity entries that do not define it.
+            const techStackSource = Array.isArray(projectData.techStack) ? projectData.techStack : [];
+            const techStack = techStackSource.map(path => {
                 if (!canHover) return path; // Keep regular
                 const name = path.split('/').pop().replace('.webp', '');
                 if (name === 'csslogo') return '/textures/gallery/css3logo_painted.webp';
@@ -353,10 +412,12 @@ const GalleryRoom = ({ showRoom, onReady, isExiting, isWarmup }) => {
                 paintedTexture: (paintedTex !== frontTex && canHover) ? paintedTex : null,
                 backTexture: backTextureRaw,
                 buttonTexture: overlayTextureRaw,
-                techStack: techStack
+                techStack: techStack,
+                cardTechKeys: deriveTechKeys(projectData),
+                cardTagline: projectData.tagline || projectData.shortDescription || projectData.description || ''
             };
         });
-    }, [projectTextures, backTextureRaw, overlayTextureRaw]);
+    }, [activeProjects, canHover, projectTextures, paintedTextures, backTextureRaw, overlayTextureRaw]);
 
     // Function to scroll to a specific project index
     const scrollToIndex = (index, onComplete) => {
